@@ -135,7 +135,7 @@
 </style>
 </head>
 <body>
-<header><h1>CharmProof</h1><span>壓克力製作模擬 · 自用預覽功能，不保證準確度</span><span style="margin-left:auto; color:var(--accent);">r54 · 0712-3</span></header>
+<header><h1>CharmProof</h1><span>壓克力製作模擬 · 自用預覽功能，不保證準確度</span><span style="margin-left:auto; color:var(--accent);">r55 · 0712-4</span></header>
 <div class="wrap">
   <div class="stage">
     <div class="sizectrl">
@@ -302,8 +302,8 @@ let fitRect = {x:S*0.06, y:S*0.06, w:S*0.88, h:S*0.88};
 function refImg(){ return state.shape || state.art || state.white || state.back; }
 function computeFit(){
   const ref = refImg();
-  const dw = ref ? ref.naturalWidth||ref.width : 1;
-  const dh = ref ? ref.naturalHeight||ref.height : 1;
+  const dw = (ref && (ref.naturalWidth||ref.width)) || 1;    // r55：|| 1 兜底——無尺寸 SVG 兩值皆 0 會除以 0→整片 fitRect NaN 白屏（冷讀抓到）
+  const dh = (ref && (ref.naturalHeight||ref.height)) || 1;
   const box = {x:S*0.06, y:S*0.06, w:S*0.88, h:S*0.88};
   const r = Math.min(box.w/dw, box.h/dh);
   const w = dw*r, h = dh*r;
@@ -761,7 +761,7 @@ let lastAnim=false;
 function render(t){
   const dpr = Math.min(window.devicePixelRatio||1, 2);
   const cssW = view.clientWidth;
-  if(view.width !== (cssW*dpr)|0){ view.width=(cssW*dpr)|0; view.height=(cssW*dpr)|0; }
+  if(view.width !== ((cssW*dpr)|0)){ view.width=(cssW*dpr)|0; view.height=(cssW*dpr)|0; }   // r55：補括號——|0 優先權低於 !==，非整數 DPR 下條件恆真、每幀白重設 canvas（冷讀抓到）
   const w=view.width, h=view.height;
   if(viewThru.width!==w || viewThru.height!==h){ viewThru.width=w; viewThru.height=h; }
   if(viewBlock.width!==w || viewBlock.height!==h){ viewBlock.width=w; viewBlock.height=h; }
@@ -1000,6 +1000,11 @@ function loadLayer(key, f){
   const {btn,clr} = layerUI[key];
   const img=new Image();
   img.onload=()=>{
+    URL.revokeObjectURL(img.src);   // r55：載入完成即釋放 blob URL——長 session 反覆換圖才不會記憶體累積（冷讀抓到）
+    if(!(img.naturalWidth||img.width) || !(img.naturalHeight||img.height)){
+      alert(`「${f.name}」無法取得尺寸（SVG 需要 width/height 屬性），此檔未載入。`);
+      return;   // 不進 state＝computeFit 不會吃到 0 尺寸圖
+    }
     state[key]=img; btn.textContent=f.name; btn.classList.add('loaded'); clr.hidden=false;
     fitDirty=true; maskDirty=true;   // 任何圖檔變動都重算共用矩形與遮罩
     redraw();
