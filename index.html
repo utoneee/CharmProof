@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CharmProof 壓克力製作模擬</title>
+
+<style>
+  :root{
+    /* r51「混音控台」皮膚：整頁＝儀表底盤（漸層在 body），卡片＝內凹深槽，控件＝浮起實體鍵；accent 改冰青 */
+    --bg:#1e232b; --panel:#12161c; --key:#2b323c; --key2:#232932; --line:#39414e; --line-soft:#1b2028;
+    --txt:#e6eaef; --sub:#93a0b0; --faint:#7c8898;
+    --accent:#59c2d6; --accent-hi:#6fd0e2; --accent-lo:#4bb4c8; --accent-txt:#0e1418;
+    --ring:rgba(89,194,214,.32); --glow:0 0 8px rgba(89,194,214,.45);
+    --well:inset 0 3px 8px rgba(0,0,0,.5), inset 0 -1px 0 rgba(255,255,255,.03);
+    --keyshadow:0 3px 8px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06);
+    --keyshadow-on:0 3px 8px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.35);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{background:linear-gradient(180deg,#242933,#1a1f27) fixed; color:var(--txt); font-family:"Segoe UI","Microsoft JhengHei",sans-serif; overflow:hidden; display:flex; flex-direction:column; -webkit-font-smoothing:antialiased;}
+  header{flex:0 0 auto; padding:13px 22px; border-bottom:1px solid rgba(0,0,0,.35); box-shadow:0 1px 0 rgba(255,255,255,.04); display:flex; align-items:baseline; gap:12px; min-width:0;}
+  header h1{font-size:15px; font-weight:650; letter-spacing:.4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  header span{font-size:11.5px; color:var(--faint); letter-spacing:.3px;}
+  .wrap{flex:1 1 auto; min-height:0; display:flex; gap:22px; padding:20px 22px; max-width:1400px; width:100%; margin:0 auto;}
+  .stage{flex:2 1 320px; min-width:240px; height:100%; display:flex; flex-direction:column; align-items:center; gap:8px; padding-top:4px;}
+  .stagebox{position:relative; width:var(--stage-size,420px); max-width:100%; max-height:100%; aspect-ratio:1/1; border-radius:12px; border:1px solid var(--line); overflow:hidden; perspective:1100px; cursor:grab; touch-action:none; flex:0 0 auto;}
+  .stagebox:active{cursor:grabbing;}
+  .stagebox.light{background:#f2f0ec;}
+  .stagebox.dark{background:#2a2c31;}
+  .stagebox.checker{background:#e9e9e9; background-image:conic-gradient(#cfcfcf 90deg,transparent 90deg 180deg,#cfcfcf 180deg 270deg,transparent 270deg); background-size:12.5% 12.5%;}
+  .stagebox.mat{background:#bcc8d1; background-image:linear-gradient(#4d6f92 2px,transparent 2px),linear-gradient(90deg,#4d6f92 2px,transparent 2px); background-size:9% 9%; background-position:4.5% 4.5%;}
+  .stagebox.env{background:
+    radial-gradient(circle at 26% 20%, #ff9d3c 0%, transparent 46%),
+    radial-gradient(circle at 80% 74%, #23c2a0 0%, transparent 50%),
+    radial-gradient(circle at 60% 40%, #c765d6 0%, transparent 54%),
+    linear-gradient(135deg, #2f6bd6, #7a2fb0);}
+  #view{position:relative; z-index:3; width:100%; height:100%; display:block; will-change:transform;}
+  /* r43 雙畫布重構·下畫布：透射層（透色墨/板色）交給瀏覽器對 DOM 背景做乘法——深底自動變暗、白底＝tint 不變；
+     背景不進畫布（r19 黏背景的教訓）。白色像素在 multiply 下＝無操作，等同透明 */
+  #viewThru{position:absolute; z-index:2; inset:0; width:100%; height:100%; display:block; will-change:transform; mix-blend-mode:multiply; pointer-events:none;}
+  #viewBlock{position:absolute; z-index:1; inset:0; width:100%; height:100%; display:block; will-change:transform; pointer-events:none;}   /* r44 遮光畫布：普通合成無 blend，霧白/螢光板色在深底下靠它擋光 */
+  /* r37 影子改「平放桌面」：整片刀模剪影墊在吊飾正後方、往右下微偏——邊緣露出的影讀作板厚（用戶：不要在下方）。背景圖由 updateGroundShadow() 生成 */
+  .ground-shadow{position:absolute; z-index:0; inset:0; transform:translate(1.4%,1.8%); filter:blur(8px); pointer-events:none; display:none;}
+  .ground-shadow.show{display:block;}
+  .stage .hint{font-size:12px; color:var(--faint); text-align:center; letter-spacing:.3px;}
+  .stagewrap{flex:1 1 auto; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;}
+  .sizectrl{flex:0 0 auto; display:flex; align-items:center; gap:9px; font-size:12px; color:var(--sub); width:100%; max-width:520px; padding-bottom:12px; margin-bottom:6px; border-bottom:1px solid rgba(0,0,0,.3);}
+  .sizectrl input[type=range]{flex:1; accent-color:var(--accent);}
+  .sizectrl input[type=number]{width:58px; background:var(--panel); border:1px solid transparent; box-shadow:inset 0 2px 5px rgba(0,0,0,.45); border-radius:7px; color:var(--txt); font-size:12px; padding:5px 6px; transition:border-color .15s;}
+  .sizectrl input[type=number]:focus{outline:none; border-color:var(--accent-lo);}
+  .sizectrl button{background:linear-gradient(180deg,var(--key),var(--key2)); border:1px solid transparent; color:var(--sub); border-radius:7px; padding:5px 10px; font-size:12px; cursor:pointer; flex:0 0 auto; box-shadow:var(--keyshadow); transition:color .15s;}
+  .sizectrl button:hover{color:var(--accent);}
+  .panel{flex:1 1 460px; width:auto; min-width:340px; max-width:620px; height:100%; overflow-y:auto; overflow-x:hidden; display:grid; grid-template-columns:1fr 2fr; grid-auto-rows:min-content;   /* r50：加工只剩開關再縮、檢視更寬（用戶指示；r35 原 2fr 3fr） */ align-content:start; gap:16px; padding-right:6px; scrollbar-width:thin; scrollbar-color:var(--line) transparent;}   /* r50：外層面板框撤下（用戶：不要最外層的框） */
+  .seg button{white-space:nowrap;}
+  @media (max-width:900px){ .panel{grid-template-columns:1fr;} }
+  .panel::-webkit-scrollbar{width:8px;}
+  .panel::-webkit-scrollbar-thumb{background:var(--line); border-radius:4px;}
+  .panel::-webkit-scrollbar-track{background:transparent;}
+  .card{flex:0 0 auto; min-width:0;}
+  .card.wide{grid-column:1/-1;}
+  .card{background:var(--panel); border:1px solid rgba(0,0,0,.4); border-radius:12px; padding:14px 15px 13px; box-shadow:var(--well);}
+  .card h2{display:flex; align-items:center; gap:8px; font-size:10px; color:var(--sub); font-weight:700; margin-bottom:12px; letter-spacing:3px;}
+  .card h2::before{content:""; flex:0 0 auto; width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:var(--glow);}
+  .card h2::after{content:""; flex:1 1 auto; height:1px; background:linear-gradient(90deg,rgba(89,194,214,.35),transparent);}
+  .card h2.hrow::after, .inkrow h2::after{content:none;}
+  .seg{display:flex; gap:6px;}
+  .seg button{flex:1; padding:8px 4px; background:linear-gradient(180deg,var(--key),var(--key2)); border:1px solid transparent; color:var(--sub); border-radius:8px; cursor:pointer; font-size:12.5px; letter-spacing:.3px; box-shadow:var(--keyshadow); transition:color .15s, filter .15s;}
+  .seg button:hover{color:var(--txt); filter:brightness(1.12);}
+  .seg button.on{background:linear-gradient(180deg,var(--accent-hi),var(--accent-lo)); border-color:transparent; color:var(--accent-txt); font-weight:700; box-shadow:var(--keyshadow-on);}
+  .row{display:flex; align-items:center; justify-content:space-between; padding:8px 0; font-size:13px; color:var(--txt);}
+  .row + .row{border-top:1px solid var(--line-soft);}
+  .toggle{position:relative; width:38px; height:21px; background:#161b22; border-radius:11px; cursor:pointer; transition:background .18s, box-shadow .18s; box-shadow:inset 0 1px 3px rgba(0,0,0,.55); flex:0 0 auto;}
+  .toggle::after{content:""; position:absolute; top:2.5px; left:2.5px; width:16px; height:16px; background:#5d6a7a; border-radius:50%; transition:left .18s, background .18s;}
+  .toggle:hover{background:#1c222b;}
+  .toggle.on{background:var(--accent); box-shadow:var(--glow), inset 0 1px 2px rgba(0,0,0,.2);}
+  .toggle.on:hover{background:var(--accent);}
+  .toggle.on::after{left:19px; background:#0e1418;}
+  .file-row{display:flex; align-items:center; gap:8px; padding:5px 0; font-size:13px;}
+  .file-row label{flex:0 0 92px; color:var(--faint); font-size:12.5px;}
+  .file-row .btn{flex:1; padding:7px 10px; border:1px dashed var(--line); border-radius:7px; color:var(--faint); background:rgba(255,255,255,.02); cursor:pointer; font-size:12px; text-align:left; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; transition:border-color .15s, color .15s;}
+  .file-row .btn:hover{border-color:#4a5568; color:var(--txt);}
+  .file-row .btn.loaded{border-style:solid; border-color:var(--accent-lo); color:var(--txt); background:rgba(89,194,214,.08);}
+  .file-row .clear{flex:0 0 auto; background:none; border:none; color:var(--faint); cursor:pointer; font-size:14px; padding:2px 4px; transition:color .15s;}
+  .file-row .clear:hover{color:var(--txt);}
+  input[type=file]{display:none;}
+  .flipbtn{width:100%; padding:11px; background:linear-gradient(180deg,var(--key),var(--key2)); border:1px solid transparent; border-radius:10px; color:var(--txt); cursor:pointer; font-size:13.5px; letter-spacing:.5px; box-shadow:0 3px 10px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.07); transition:color .15s, filter .15s;}
+  .flipbtn:hover{filter:brightness(1.1);}
+  .flipbtn:active{background:var(--key2); filter:brightness(.95);}
+  .note{font-size:11px; color:var(--faint); margin-top:8px; line-height:1.6;}
+  /* r49 壓克力顏色卡＝素材格；r51 混音控台版：框改「浮起小平台」，legend 用凹槽底色鏤空 */
+  .boxes{display:flex; gap:12px; flex-wrap:wrap; align-items:stretch;}
+  .boxes + .boxes{margin-top:14px;}
+  .fbox{border:1px solid transparent; border-radius:10px; padding:13px 12px 8px; position:relative; display:flex; align-items:flex-start; gap:10px; background:linear-gradient(180deg,#20252e,#1a1f27); box-shadow:0 3px 8px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05);}
+  .fbox .legend{position:absolute; top:-8px; left:9px; font-size:9px; font-weight:700; color:var(--sub); background:var(--panel); padding:1px 7px; letter-spacing:2px; border-radius:3px;}
+  .fbox .trow{display:flex; gap:7px;}
+  .fbox .attr{display:flex; align-items:center; align-self:center; padding-left:10px; border-left:1px dashed var(--line);}
+  .fbox .attr.off{opacity:.35; pointer-events:none;}   /* 未選自訂色：變灰保留位置（版面不跳動；判斷點，觀感不對再改整段消失） */
+  .attr .seg{gap:5px;}
+  .attr .seg button{flex:0 0 auto; padding:5px 10px; font-size:11px; border-radius:6px;}
+  /* r52：加工卡 row 內的三段票（閃粉/碎光）——縮小號，跟屬性三段同尺寸 */
+  .row .seg{gap:5px; flex:0 0 auto;}
+  .row .seg button{flex:0 0 auto; padding:5px 10px; font-size:11px; border-radius:6px;}
+  .tile{width:40px; text-align:center; cursor:pointer;}
+  .tile .box{width:32px; height:32px; margin:0 auto 5px; border-radius:8px; border:1.5px solid rgba(0,0,0,.35); box-shadow:0 2px 5px rgba(0,0,0,.35); position:relative; transition:transform .12s, border-color .12s, box-shadow .12s;}
+  .tile:hover .box{border-color:#4a5568; transform:translateY(-1px);}
+  .tile .lb{font-size:10px; color:var(--sub); line-height:1.2; transition:color .12s;}
+  .tile.on .box{border-color:var(--accent); box-shadow:0 0 0 2px var(--ring), 0 0 10px rgba(89,194,214,.3), 0 2px 5px rgba(0,0,0,.35); transform:translateY(-1px);}
+  .tile.on .lb{color:var(--txt); font-weight:700;}
+  .b-clear{background:conic-gradient(#cfcfcf 25%,#f4f4f4 0 50%,#cfcfcf 0 75%,#f4f4f4 0); background-size:10px 10px;}
+  .b-cu{overflow:hidden;}
+  .b-cu::after{content:""; position:absolute; inset:0; background:var(--cu,#c9a0e8); opacity:.70;}
+  .b-cu input{position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; z-index:3;}
+  .cbadge{position:absolute; right:-4px; bottom:-4px; width:13px; height:13px; border-radius:50%; z-index:2; pointer-events:none;
+    background:conic-gradient(from 0deg,#e66,#ec7,#7c6,#6cc,#88e,#c6c,#e66); border:1.5px solid var(--panel);}
+  .b-frost{background:linear-gradient(145deg,#fdfdfa,#e8e9e4);}
+  .b-ny{background:#cddc39;} .b-np{background:#f0326e;} .b-no{background:#fc6024;} .b-nb{background:#9ad7f0;}
+  .b-laser{background:linear-gradient(135deg,#40e0c0,#7f9cf5 55%,#d67fe8);}
+  /* r30 介面整理 */
+  .card h2.hrow{display:flex; align-items:center; justify-content:flex-start; gap:10px;}
+  /* r52 圖檔卡：摺疊三角放大＋收起時的提示小字（展開時 JS 隱藏） */
+  /* 標題 span 改 flex 置中——r52 首刀三角 17px 用 baseline 對齊會把「圖檔」二字拖低（用戶回報字歪掉） */
+  #filesHead > span:first-child{display:inline-flex; align-items:center; gap:5px;}
+  #filesArrow{font-size:17px; line-height:1;}
+  .fhint{font-size:11px; font-weight:400; color:var(--faint); letter-spacing:.5px; white-space:nowrap;}
+  .hrow .btn.primary{margin-left:auto;}
+  .hrow .btn{flex:0 1 58%; padding:7px 10px; border:1px dashed var(--line); border-radius:7px; color:var(--faint); background:rgba(255,255,255,.02); cursor:pointer; font-size:12px; text-align:left; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; letter-spacing:0; transition:border-color .15s, color .15s;}
+  .hrow .btn:hover{border-color:#4a5568; color:var(--txt);}
+  .hrow .btn.primary{flex:0 0 auto; padding:7px 18px; border:1px solid transparent; background:linear-gradient(180deg,var(--accent-hi),var(--accent-lo)); color:var(--accent-txt); font-weight:700; font-size:12.5px; text-align:center; letter-spacing:.5px; box-shadow:var(--keyshadow-on); transition:filter .15s;}
+  .hrow .btn.primary:hover{filter:brightness(1.08);}
+  /* r49：.acrylrow/.vdiv/.grp 舊色票列已由素材格三框取代，樣式移除 */
+  .panel > .flipbtn{grid-column:1/-1;}
+  .inkrow{display:flex; align-items:center; gap:14px;}   /* r35：白墨標題與選項併一行 */
+  .inkrow h2{margin:0; flex:0 0 auto;}
+  .stagebox.custom{background-color:#e9e9e9; background-size:cover; background-position:center;}
+</style>
+</head>
+<body>
+<header><h1>CharmProof</h1><span>壓克力製作模擬 · 自用預覽功能，不保證準確度</span><span style="margin-left:auto; color:var(--accent);">r54 · 0712-3</span></header>
+<div class="wrap">
+  <div class="stage">
+    <div class="sizectrl">
+      <span>檢視大小</span>
+      <input type="range" id="rngSize" min="220" max="640" step="10" value="420">
+      <input type="number" id="numSize" min="220" max="640" step="1" value="420">
+      <span>px</span>
+      <button id="btnSizeReset">重置</button>
+    </div>
+    <div class="stagewrap">
+      <div class="stagebox checker" id="stagebox"><div class="ground-shadow"></div><canvas id="viewBlock"></canvas><canvas id="viewThru"></canvas><canvas id="view"></canvas></div>
+      <div class="hint" id="hint">目前：正面 · 拖曳可轉動，雙擊回正</div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="card wide">
+      <h2 class="hrow" id="filesHead" style="cursor:pointer;"><span>圖檔 <span id="filesArrow">▸</span></span><span class="fhint" id="filesHint">單獨上傳　正、反、白墨、刀模</span><button class="btn primary" id="btnBatch">批次上傳</button></h2>
+      <div id="filesBody" hidden>
+        <div class="file-row"><label>正面</label><button class="btn" id="btnArt">選擇透明 PNG…</button><button class="clear" id="clrArt" hidden="">✕</button></div>
+        <div class="file-row"><label>白墨</label><button class="btn" id="btnWhite">選擇透明 PNG…</button><button class="clear" id="clrWhite" hidden="">✕</button></div>
+        <div class="file-row"><label>背面</label><button class="btn" id="btnBack">選擇透明 PNG…</button><button class="clear" id="clrBack" hidden="">✕</button></div>
+        <div class="file-row"><label>刀模</label><button class="btn" id="btnShape">選擇透明 PNG…</button><button class="clear" id="clrShape" hidden="">✕</button></div>
+        <div class="note">批次上傳：檔名含「白墨/反面/刀模/正面」會自動對號，其餘照選取順序補進 正面→白墨→反面→刀模。</div>
+      </div>
+      <input type="file" id="fileBatch" accept="image/png,image/webp,image/svg+xml" multiple>
+      <input type="file" id="fileArt" accept="image/png,image/webp,image/svg+xml">
+      <input type="file" id="fileWhite" accept="image/png,image/webp,image/svg+xml">
+      <input type="file" id="fileBack" accept="image/png,image/webp,image/svg+xml">
+      <input type="file" id="fileShape" accept="image/png,image/webp,image/svg+xml">
+    </div>
+    <div class="card wide">
+      <h2>壓克力顏色</h2>
+      <!-- r50 配置（用戶指示）：第一列 透明｜特殊｜螢光板，第二列 自訂色＋屬性三段 -->
+      <div id="acrylBoxes">
+        <div class="boxes">
+          <div class="fbox">
+            <span class="legend">板色</span>
+            <div class="trow">
+              <div class="tile on" data-c="" title="透明"><div class="box b-clear"></div><div class="lb">透明</div></div>
+            </div>
+          </div>
+          <div class="fbox">
+            <span class="legend">特殊</span>
+            <div class="trow">
+              <div class="tile" data-m="frost" title="霧白"><div class="box b-frost"></div><div class="lb">霧白</div></div>
+              <div class="tile" data-m="laser" title="鐳射"><div class="box b-laser"></div><div class="lb">鐳射</div></div>
+            </div>
+          </div>
+          <div class="fbox">
+            <span class="legend">螢光板</span>
+            <div class="trow">
+              <div class="tile" data-m="neon" title="螢光黃/綠"><div class="box b-ny"></div><div class="lb">黃/綠</div></div>
+              <div class="tile" data-m="npink" title="螢光粉"><div class="box b-np"></div><div class="lb">粉</div></div>
+              <div class="tile" data-m="norange" title="螢光橘"><div class="box b-no"></div><div class="lb">橘</div></div>
+              <div class="tile" data-m="nblue" title="螢光藍"><div class="box b-nb"></div><div class="lb">藍</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="boxes">
+          <div class="fbox">
+            <span class="legend">自訂色</span>
+            <div class="trow">
+              <div class="tile" id="tileCustom" title="自訂色"><div class="box b-clear b-cu"><input type="color" id="swCustom" value="#c9a0e8"><span class="cbadge"></span></div><div class="lb">自訂</div></div>
+            </div>
+            <div class="attr off" id="attrOpa">
+              <div class="seg" id="segAcrylOpa">
+                <button data-v="" class="on">透</button>
+                <button data-v="semi">半透</button>
+                <button data-v="solid">不透</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card wide">
+      <div class="inkrow">
+        <h2>白墨</h2>
+        <div class="seg" id="segInk" style="flex:1;">
+          <button data-v="none">無</button>
+          <button data-v="bottom" class="on">底層</button>
+          <button data-v="sandwich">夾層(雙面)</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>加工</h2>
+      <div class="row">反光帶<div class="toggle" id="tgGloss"></div></div>
+      <div class="row">閃粉<div class="seg" id="segGlitter">
+        <button data-v="" class="on">無</button><button data-v="lo">少</button><button data-v="hi">多</button>
+      </div></div>
+      <div class="row">碎光<div class="seg" id="segFlake">
+        <button data-v="" class="on">無</button><button data-v="sm">小</button><button data-v="lg">大</button>
+      </div></div>
+    </div>
+    <div class="card">
+      <h2>檢視</h2>
+      <div class="seg" id="segBg">
+        <button data-v="checker" class="on">透格</button>
+        <button data-v="mat">桌墊</button>
+        <button data-v="env">染彩</button>
+        <button data-v="light">淺色</button>
+        <button data-v="dark">深色</button>
+        <button data-v="custom">自訂圖</button>
+      </div>
+      <input type="file" id="fileBg" accept="image/*">
+      <div style="height:10px"></div>
+      <div class="row">厚度（側壁跟著傾斜露出）<div class="toggle on" id="tgThick"></div></div>
+      <div class="row">底部影子<div class="toggle" id="tgShadow"></div></div>
+    </div>
+    <button class="flipbtn" id="btnFlip">⇋ 翻到背面</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const S = 900; // 內部合成解析度
+const state = {
+  ink:'bottom', gloss:'', thick:'thin', glitter:'', flake:'',   // r52：閃粉 ''/lo/hi、碎光 ''/sm/lg 三段（原 true/false 開關）   // r11 預設：厚度開、光澤關（用戶指定）；r35 光澤改開關（''/'streak'）；r37 滴膠/鑲邊都刪（見加回筆記）
+  bg:'checker', side:'front', acryl:'', acrylOpa:'', material:'',   // r47：acrylOpa＝自訂色透明度三段 ''=透明/semi=半透/solid=不透
+  art:null, white:null, back:null, shape:null
+};
+// 螢光系板材（0710/A板材 99x 系列，色值目測取樣）：board＝板色、wall＝側壁色（實照側壁比板面更亮更飽和）
+const NEON = {
+  neon:   {board:'196,238,0',   wall:'214,255,60'},    // #993 螢光黃/綠（用戶驗 r29：正確，邊較亮）
+  npink:  {board:'240,50,110',  wall:'214,0,86'},      // #991 螢光粉（r30：桃紅→粉紅偏紅；邊比面更飽和/深）
+  norange:{board:'252,96,36',   wall:'255,150,60'},    // #992 螢光橘（r30：面更飽和/濃＋微發光）
+  nblue:  {board:'184,226,242', wall:'62,110,214'},    // #994 螢光藍（r30：面再淺一點；邊是明顯的藍）
+};
+function drawErr(ctx,label,e){
+  console.error('['+label+']', e);
+  ctx.save();
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.font='bold 20px sans-serif';
+  ctx.fillStyle='#ff4444';
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillText('['+label+'] '+(e&&e.message?e.message:e), 10, 10);
+  ctx.restore();
+}
+function rgba(hex,a){
+  const n=parseInt(hex.slice(1),16);
+  return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;
+}
+
+const view = document.getElementById('view');
+const vctx = view.getContext('2d');
+const viewThru = document.getElementById('viewThru');   // r43 下畫布（CSS mix-blend-mode:multiply）：透射層直出
+const vtctx = viewThru.getContext('2d');
+const viewBlock = document.getElementById('viewBlock');  // r44 遮光畫布（最底、普通合成）：霧白/螢光板色
+const vbctx = viewBlock.getContext('2d');
+const maskC = mk(), charmC = mk(), tmpC = mk(), ringC = mk();
+const charmThruC = mk();                      // r43 透射層合成畫布（S 空間，同 charmC 各自吃刀模遮罩）
+const charmBlockC = mk();                     // r44 遮光層合成畫布（S 空間，同樣各自吃刀模遮罩）
+const maskBackC = mk(), ringBackC = mk();   // 背面用：正面遮罩/亮環的鏡像版
+const bevelC = mk(), bevelBackC = mk();      // 反光鑲邊帶（貼輪廓的收窄邊）
+const wallC = mk();                           // 側壁厚度：剪影暗色複本（在 render 堆疊）
+const wallStackC = document.createElement('canvas');  // 側壁堆疊層（view 尺寸，堆完再挖掉正面 footprint）
+function mk(){ const c=document.createElement('canvas'); c.width=S; c.height=S; return c; }
+
+let maskBBox = null, glitterPts = [], flakePts = [], maskDirty = true, fitDirty = true;
+let fitRect = {x:S*0.06, y:S*0.06, w:S*0.88, h:S*0.88};
+
+// 所有圖層共用同一個矩形（檔案本來同尺寸、已對位），直接拉伸貼入 → 1:1 疊合
+function refImg(){ return state.shape || state.art || state.white || state.back; }
+function computeFit(){
+  const ref = refImg();
+  const dw = ref ? ref.naturalWidth||ref.width : 1;
+  const dh = ref ? ref.naturalHeight||ref.height : 1;
+  const box = {x:S*0.06, y:S*0.06, w:S*0.88, h:S*0.88};
+  const r = Math.min(box.w/dw, box.h/dh);
+  const w = dw*r, h = dh*r;
+  fitRect = {x:box.x+(box.w-w)/2, y:box.y+(box.h-h)/2, w, h};
+  fitDirty = false;
+}
+// 統一貼圖：拉伸到共用矩形（同尺寸檔案 → 像素對齊）
+function place(ctx,img){ ctx.drawImage(img, fitRect.x, fitRect.y, fitRect.w, fitRect.h); }
+// 左右鏡像貼圖（沿畫布中線翻）：印刷面「從另一面看」時用
+function placeMir(ctx,img){
+  ctx.save();
+  ctx.translate(S,0); ctx.scale(-1,1);
+  ctx.drawImage(img, fitRect.x, fitRect.y, fitRect.w, fitRect.h);
+  ctx.restore();
+}
+function put(ctx,img,mir){ (mir?placeMir:place)(ctx,img); }
+
+// 在指定 ctx 畫「白墨」：srcImg 不透明處填純白（mir＝是否鏡像）
+// 2026-07-10 加厚：實體白墨版是實心白，圖案的半透明像素（網點/漸層）底下也是全白；
+// 自我疊印 3 次把半透 alpha 逼近實心（a→1-(1-a)^4），否則板色從網點縫透上來、整張發灰
+function paintWhite(ctx,srcImg,mir){
+  const tc = tmpC.getContext('2d');
+  tc.clearRect(0,0,S,S);
+  put(tc, srcImg, mir);
+  tc.globalCompositeOperation='source-in';
+  tc.fillStyle='#fff'; tc.fillRect(0,0,S,S);
+  tc.globalCompositeOperation='source-over';
+  tc.drawImage(tmpC,0,0); tc.drawImage(tmpC,0,0); tc.drawImage(tmpC,0,0);
+  ctx.drawImage(tmpC,0,0);
+}
+// 疊印墨化（2026-07-10，據 0710/螢光壓克力-完稿須知）：彩墨是透明疊印墨（色彩增值）、印不出白——
+// 每個像素的不透明度隨墨色深淺：深色墨遮、淺色墨淡染、純白＝沒印（趨近全透）。
+// 只有白墨層是實心，不走這裡。處理結果按原圖快取，換圖自動重算。
+const inkCache = new WeakMap();       // 直視用（白墨區重繪）
+const inkCacheThru = new WeakMap();   // 舊穿透用（反解 alpha 版；r43 起主線不再用，留供退回）
+const inkCacheTint = new WeakMap();   // r43 透射 tint 直出（下畫布 multiply 用：白＝無操作＝透明）
+const inkCacheTintF = new WeakMap();  // r46 正面直視版 tint（再混白 FRONTPALE＝更透明）
+// r46 正面直視的無白墨疊印「應只會較透明、而不是變黑」（用戶）：白墨內縮那圈沒白墨的正面疊印，
+// 反面隔板看＝染色玻璃變暗（成立）；正面直視該是淡淡半透。multiply 語意下「混白＝變透明」
+//（白＝無操作＝直接看到板/背景），所以正面墊底段的 tint 額外混白這一顆——透明板深底下仍自然消失。
+const FRONTPALE = 0.40;               // 正面直視疊印的透明度旋鈕：0＝跟反面一樣黑、1＝完全看不見
+// mode：falsy＝直視、true＝舊穿透（反解）、'tint'＝透射色直出（alpha 全 255，交給 multiply 畫布）、
+//       'tintF'＝tint＋FRONTPALE 混白（只給正面 view 的 drawNear 墊底段用）
+// r43 註：'tint' 保留 wmix 白混＋SK 彩度回補——白底下 multiply(tint)＝tint＝與 r42 反解版逐像素一致
+//（驗收標準「白底不能比 r42 差」），深底變暗由 multiply 免費取得；wmix 是否退役等結構驗證通過再重校
+function inkify(img, mode){
+  const thru = !!mode;
+  const cache = mode==='tint' ? inkCacheTint : mode==='tintF' ? inkCacheTintF : mode ? inkCacheThru : inkCache;
+  let c = cache.get(img); if(c) return c;
+  try {
+    c = document.createElement('canvas');
+    const w = img.naturalWidth||img.width, h = img.naturalHeight||img.height;
+    c.width=w; c.height=h;
+    const x = c.getContext('2d');
+    x.drawImage(img,0,0);
+    const id = x.getImageData(0,0,w,h), d = id.data;
+    for(let i=0;i<d.length;i+=4){
+      const r=d[i], g=d[i+1], b=d[i+2];
+      // 墨濃度＝顏色越深越濃（用 max/min 平均，讓黃/青這類亮但有色的墨仍看得見）
+      const dens = 1 - (Math.max(r,g,b) + Math.min(r,g,b)) / 510;
+      // r12 彩度再加鮮＋微提亮：透射墨要有「仿螢光板」的發光感（用戶對照實體：彩度不夠、實體有點發光）
+      const avg = (r+g+b)/3, K = 1.5, LIFT = 1.03;
+      const pr = Math.max(0, Math.min(255, (avg + (r-avg)*K) * LIFT));
+      const pg = Math.max(0, Math.min(255, (avg + (g-avg)*K) * LIFT));
+      const pb = Math.max(0, Math.min(255, (avg + (b-avg)*K) * LIFT));
+      // r20 透射色模型（取代 r19 的畫布 multiply——那版背景得畫進畫布、黏在吊飾上）：
+      // 1) 攤平在白上＝透射色 tint（＝這塊墨印在白紙上該有的顏色，正是 F 實體照拍到的），濃淡曲線沿 r15 基準
+      // r21 曲線加濃：F2 淺綠 #B6D00B 反推墨濃度≈0.86，r15 曲線只給 0.74（粉彩感）。
+      // r23 軟拐點曲線（取代 r22 平頂 cap——平頂讓「正面深色退」與「白墨淺綠變沉」互相打架）：
+      // 淺中色照 dens*1.5 爬到 0.88（淺綠≈0.86 恢復 F2 的沉），過拐點後越深反而往回收（深墨網點印刷本來就留白）
+      let aBase = dens*1.5;
+      // r24 深色端滑落拆兩組：直視版現在只給「白墨區重繪」用（無白墨墊底/隔板穿透都走 thru 版），
+      // 用戶三點回饋（正面白墨深色太濃、白墨深綠 vs 透色深綠要拉開）全指向白墨區深色端 → 只加陡直視版
+      if(aBase > 0.88){
+        // r26 直視滑落收平（1.15/0.50→0.15/0.80）：r25 拆掉雙層墨後白墨區只剩這一層，
+        // 深色 alpha 0.5 疊白＝髒灰（用戶驗 r25：太淺、深色髒）；白墨上實色本就該近實心
+        const slope = thru ? 0.55 : 0.15, floor = thru ? 0.62 : 0.80;
+        aBase = Math.max(floor, 0.88 - (dens-0.587)*slope);   // thru：深橄欖(.73)→0.80、近黑→0.65（r23 不動）；直視：深橄欖→0.86、近黑→0.82
+      }
+      const aEff = aBase * (d[i+3]/255);
+      let tr = 255 + (pr-255)*aEff, tg = 255 + (pg-255)*aEff, tb = 255 + (pb-255)*aEff;
+      // r21 穿透/無白墨變體：深墨多衰減、淺墨幾乎不衰減。r22 加陡（E2 實證：無白墨的深綠透到看得見格線＝非常不明顯）
+      if(thru){
+        // r23：門檻降、斜率減——透色深綠回一點深（36%→28% 白）、透色淺綠加淡（4%→12% 白，F2 外圈 #C0CA8B 比白墨區 #B6D00B 明顯淡）
+        // r40 斜率 1.0→1.35 用戶仍嫌不夠透；r42 改門檻 0.45→0.50＋斜率 2.2＋cap 0.65——
+        // 深橄欖(.73)：+38%→+51% 白；淺綠(.57)：+16%→+15% 幾乎不動（用戶驗 r41：淺綠沒影響＝要維持住）
+        const wmix = Math.min(0.65, Math.max(0, dens-0.50) * 2.2);
+        tr += (255-tr)*wmix; tg += (255-tg)*wmix; tb += (255-tb)*wmix;
+        // r24 彩度回補：白混把彩度也洗掉（深綠變粉）——用戶驗「透色深綠夠深但要更鮮豔」→ 按 wmix 比例拉回彩度、亮度不動
+        const av2 = (tr+tg+tb)/3, SK = 1 + wmix*0.9;
+        tr = Math.max(0, Math.min(255, av2 + (tr-av2)*SK));
+        tg = Math.max(0, Math.min(255, av2 + (tg-av2)*SK));
+        tb = Math.max(0, Math.min(255, av2 + (tb-av2)*SK));
+      }
+      if(mode==='tintF'){
+        // r46 正面直視版：wmix/SK 照舊跑完後再整體混白 FRONTPALE——等效於「墨以 (1-FRONTPALE) 的
+        // 不透明度疊在板上」＝較透明；不做彩度回補（淡＝略去彩正是半透感）
+        tr += (255-tr)*FRONTPALE; tg += (255-tg)*FRONTPALE; tb += (255-tb)*FRONTPALE;
+      }
+      if(mode==='tint' || mode==='tintF'){
+        // r43：tint 直出——multiply 畫布上白＝無操作，透明像素（aEff=0→tint=白）自動隱形，不需反解
+        d[i]=tr; d[i+1]=tg; d[i+2]=tb; d[i+3]=255;
+      } else {
+        // 2) 反解成等效蓋色＋alpha：使 source-over 疊在白底上「精確等於 tint」、疊深底≈染深（multiply 近似）
+        //    白/淺背景（F/D2/E2 對照情境）下墨色即透射色本身；不需要畫布內背景層
+        const al = 1 - Math.min(tr,tg,tb)/255;
+        if(al < 0.004){ d[i+3] = 0; }
+        else {
+          const base = 255*(1-al);
+          d[i]   = (tr-base)/al; d[i+1] = (tg-base)/al; d[i+2] = (tb-base)/al;
+          d[i+3] = al*255;
+        }
+      }
+    }
+    x.putImageData(id,0,0);
+  } catch(e){ console.error('[inkify]', e); c = img; }   // 降級：讀不到像素就用原圖（不墨化，只是回到舊觀感）
+  cache.set(img,c);
+  return c;
+}
+// r42 透色區發光旋鈕 GLOW=0.18——r43 暫時下架：screen 自疊在 multiply 下畫布上無意義（判斷點，
+// 用戶本來就沒驗過 r42 的 glow；要加回得在新結構重新實現，例如上畫布疊透色區的 screen 副本）
+const GLOW = 0.18;
+// 穿透層：另一面的印刷「透過沒白墨的區域」透出來 → 只剩非白墨區、疊印墨化
+//   r43：畫到下畫布（tx＝charmThruC 的 ctx）——tint 直出，白＝無操作；
+//   多層墨用 canvas multiply 互疊（兩層透明墨串聯＝物理正確；也避免 tint 的白像素蓋掉先畫的墨）
+//   imgMir＝印刷圖要不要鏡像；whiteMir＝白墨遮罩在目前這一面的方向
+function drawThrough(tx, img, imgMir, whiteSrc, whiteMir, alpha){
+  const tc = tmpC.getContext('2d');
+  tc.clearRect(0,0,S,S);
+  put(tc, inkify(img, 'tint'), imgMir);
+  if(whiteSrc){
+    tc.globalCompositeOperation='destination-out';   // 白墨處挖掉 → 只剩透明區才透得過
+    put(tc, whiteSrc, whiteMir);
+    tc.globalCompositeOperation='source-over';
+  }
+  tx.globalAlpha=alpha;
+  tx.globalCompositeOperation='multiply';   // 疊在透明像素上等同 source-over 直畫（4.6 同一招）
+  tx.drawImage(tmpC,0,0);
+  tx.globalCompositeOperation='source-over';
+  tx.globalAlpha=1;
+}
+// 近面印刷：白墨區內＝原圖（濃度由 whiteAlpha 控制），白墨區外＝疊印墨化（透明疊印、深遮淺透）
+// r43 拆兩張畫布：墊底段（透色區）→ 下畫布 tx（tint 直出）；白墨區重繪 → 上畫布 ctx（白墨是遮光層，照舊）
+// whiteAlpha（r8 新增）：印在白墨上的墨其實也是半透墨，濃度看檢視面——正面 1.0（用戶已驗收的飽和度），
+// 背面 0.95（r22：透射色模型下淺色自己會白）
+function drawNear(tx, ctx, img, imgMir, whiteSrc, whiteMir, outAlpha, whiteAlpha, frontPale){
+  const tc = tmpC.getContext('2d');
+  // r25：墊底層把白墨區挖掉。之前整張墊底＋白墨區再 multiply 重繪＝同像素吃兩層墨，
+  // 白墨區恆比模型深，且直視旋鈕的變化被墊底層稀釋（r23/r24 白墨區「沒變化」的真兇）
+  tc.clearRect(0,0,S,S);
+  // r46 frontPale＝正面 view 直視自己這面的疊印 → 'tintF'（較透明）；反面直視與隔板穿透維持 'tint'
+  //（反面那圈白墨內縮邊線＝染色玻璃變暗，用戶確認成立勿動）
+  put(tc, inkify(img, frontPale?'tintF':'tint'), imgMir);    // r22：無白墨墊底處＝墨懸在透明板上，跟隔板穿透同一種物理（E2 外圈實證）
+  if(whiteSrc){
+    tc.globalCompositeOperation='destination-out';
+    put(tc, whiteSrc, whiteMir);
+    tc.globalCompositeOperation='source-over';
+  }
+  tx.globalAlpha=outAlpha;
+  tx.globalCompositeOperation='multiply';
+  tx.drawImage(tmpC,0,0);
+  tx.globalCompositeOperation='source-over';
+  tx.globalAlpha=1;
+  if(whiteSrc){                          // 再把白墨區那份補上去（墨×白墨白＝原色，multiply 下等價於原本的實色重繪）
+    tc.clearRect(0,0,S,S);
+    put(tc, inkify(img), imgMir);   // r21：白墨上的墨也走透射色（原圖全濃度＝發黑的根源；實體網點印刷深色也頂多九成濃）
+    tc.globalCompositeOperation='destination-in';
+    put(tc, whiteSrc, whiteMir);
+    tc.globalCompositeOperation='source-over';
+    ctx.globalAlpha = (whiteAlpha==null?1:whiteAlpha);
+    ctx.globalCompositeOperation='multiply';
+    ctx.drawImage(tmpC,0,0);
+    ctx.globalCompositeOperation='source-over';
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ---------- 遮罩（刀模＝壓克力外形） ----------
+function buildMask(){
+  if(fitDirty) computeFit();
+  const ctx = maskC.getContext('2d');
+  ctx.clearRect(0,0,S,S);
+  if(state.shape){
+    // 填色刀模：不透明區＝壓克力範圍，正規化成純白剪影
+    place(ctx, state.shape);
+    ctx.globalCompositeOperation='source-in';
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,S,S);
+    ctx.globalCompositeOperation='source-over';
+  }else{
+    // 沒上傳刀模 → 用共用矩形內的橢圓當預設外形
+    ctx.fillStyle='#fff';
+    ctx.beginPath();
+    ctx.ellipse(fitRect.x+fitRect.w/2, fitRect.y+fitRect.h/2, fitRect.w/2, fitRect.h/2, 0, 0, Math.PI*2);
+    ctx.fill();
+  }
+  // 計算 bbox ＋ 撒粒子點
+  const d = ctx.getImageData(0,0,S,S).data;
+  let x0=S,y0=S,x1=0,y1=0;
+  const inside = (x,y)=> d[(y*S+x)*4+3] > 40;
+  for(let y=0;y<S;y+=3) for(let x=0;x<S;x+=3){
+    if(d[(y*S+x)*4+3]>40){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+  }
+  maskBBox = {x:x0,y:y0,w:Math.max(1,x1-x0),h:Math.max(1,y1-y0)};
+  glitterPts=[]; flakePts=[];
+  let tries=0;
+  while(glitterPts.length<420 && tries++<9000){
+    const x=(Math.random()*S)|0, y=(Math.random()*S)|0;
+    if(inside(x,y)) glitterPts.push({x,y,r:.8+Math.random()*1.8,p:Math.random()*Math.PI*2,s:.5+Math.random()*2});
+  }
+  tries=0;
+  while(flakePts.length<70 && tries++<4000){
+    const x=(Math.random()*S)|0, y=(Math.random()*S)|0;
+    if(inside(x,y)) flakePts.push({x,y,r:5+Math.random()*11,a:Math.random()*Math.PI,
+      hue:[200,320,50,170][ (Math.random()*4)|0 ],p:Math.random()*Math.PI*2});
+  }
+  // 邊緣亮環：遮罩 減去 以中心縮小 96.5% 的遮罩
+  const rc = ringC.getContext('2d');
+  rc.clearRect(0,0,S,S);
+  rc.drawImage(maskC,0,0);
+  const cx = maskBBox.x+maskBBox.w/2, cy = maskBBox.y+maskBBox.h/2, k=0.965;
+  rc.globalCompositeOperation='destination-out';
+  rc.translate(cx,cy); rc.scale(k,k); rc.translate(-cx,-cy);
+  rc.drawImage(maskC,0,0);
+  rc.setTransform(1,0,0,1,0,0);
+  rc.globalCompositeOperation='source-in';
+  rc.fillStyle='rgba(255,255,255,.85)';
+  rc.fillRect(0,0,S,S);
+  rc.globalCompositeOperation='source-over';
+  // 邊緣環帶：遮罩 減去 縮小 89.5% 的遮罩（貼輪廓的邊帶；r37 起無人使用——滴膠/鑲邊都刪了，生成段保留供加回）
+  const bc = bevelC.getContext('2d');
+  bc.clearRect(0,0,S,S);
+  bc.drawImage(maskC,0,0);
+  bc.globalCompositeOperation='destination-out';
+  bc.translate(cx,cy); bc.scale(0.895,0.895); bc.translate(-cx,-cy);
+  bc.drawImage(maskC,0,0);
+  bc.setTransform(1,0,0,1,0,0);
+  bc.globalCompositeOperation='source-over';
+  // 背面用：遮罩／亮環／斜邊的左右鏡像版（背面 view 每層各自鏡像，裁形也要跟著鏡）
+  for(const [src,dst] of [[maskC,maskBackC],[ringC,ringBackC],[bevelC,bevelBackC]]){
+    const c = dst.getContext('2d');
+    c.clearRect(0,0,S,S);
+    c.save(); c.translate(S,0); c.scale(-1,1); c.drawImage(src,0,0); c.restore();
+  }
+  updateGroundShadow();
+  maskDirty=false;
+}
+
+// 影子（r37 改平放桌面版；r36 的底部壓扁條用戶否決「不要在下方」）：整片刀模剪影染黑貼在
+// .ground-shadow（滿版 div、右下偏移由 CSS transform 管），墊在吊飾正後方——像平放在桌上，
+// 邊緣露出的影子讀作板厚。遮罩變（換刀模/素材）才重生成。
+function updateGroundShadow(){
+  try{
+    const gs = document.querySelector('.ground-shadow'); if(!gs) return;
+    const R = S/2;                                   // 半解析度就夠（有 blur），dataURL 也小
+    const c = document.createElement('canvas'); c.width=R; c.height=R;
+    const g = c.getContext('2d');
+    // r52：剪影以刀模中心放大 5%——影子比板子大一圈、四周都露出（方案A，用戶核准）
+    const kx = (maskBBox ? maskBBox.x+maskBBox.w/2 : S/2)/2, ky = (maskBBox ? maskBBox.y+maskBBox.h/2 : S/2)/2;
+    g.translate(kx,ky); g.scale(1.05,1.05); g.translate(-kx,-ky);
+    g.drawImage(maskC, 0, 0, R, R);
+    g.setTransform(1,0,0,1,0,0);
+    g.globalCompositeOperation='source-in';
+    g.fillStyle='rgba(0,0,0,0.13)';   // r39：0.38→0.25→0.18；r52 放大後再淺 0.18→0.13（用戶指示）
+    g.fillRect(0,0,R,R);
+    gs.style.background = `url(${c.toDataURL()}) center/100% 100% no-repeat`;
+  }catch(e){ console.error('[ground shadow]', e); }
+}
+
+// ---------- 合成吊飾 ----------
+function composeCharm(t){
+  if(fitDirty) computeFit();
+  if(maskDirty) buildMask();
+  const ctx = charmC.getContext('2d');
+  ctx.clearRect(0,0,S,S);
+  const xt = charmThruC.getContext('2d');   // r43 下畫布（透射層）：透色墨＋一般/透明板色
+  xt.clearRect(0,0,S,S);
+  const bt = charmBlockC.getContext('2d');  // r44 遮光畫布（最底）：霧白/螢光板色的不透明成分
+  bt.clearRect(0,0,S,S);
+
+  const back = state.side==='back';
+  // 白墨來源：優先用上傳的白墨圖，沒有則退回用設計圖輪廓當白墨
+  const whiteSrc = state.white || state.art;
+  const hasWhite = state.ink!=='none' && whiteSrc;
+
+  // （r20：r19 的「畫布內背景」已拆——背景會黏在吊飾上跟著轉，用戶不接受；
+  //   multiply 效果改在 inkify 內用「透射色反解」實現，背景回歸 DOM、吊飾恢復透明合成）
+
+  // 1. 壓克力板色（2026-07-10 修透明度：全材質都透光，濃度降回可透背景的量級；霧白＝半透光、螢光黄/鐳射＝透光）
+  //    正面 view：板在圖後面 → 這裡先墊底；背面 view：板在圖前面 → 改在印刷層之後才蓋（見 4.6）
+  function paintBoard(k, tgt){                              // k＝濃度倍率（背面透射染色時開大）；tgt＝目標 ctx（r43：正面一般/透明板畫到下畫布）
+    k = k||1;
+    const c = tgt||ctx;
+    const A = a => Math.min(1, a*k);
+    if(state.material==='frost'){
+      c.fillStyle=`rgba(242,246,249,${A(0.73)})`;           // 霧白：半透光但不全透（r32 0.75→0.73，用戶指示微調）
+      c.fillRect(0,0,S,S);
+    }else if(NEON[state.material]){
+      c.fillStyle=`rgba(${NEON[state.material].board},${A(0.60)})`;  // 螢光系：透光但不全透（r28 0.42→0.60；r29 擴充四色）
+      c.fillRect(0,0,S,S);
+    }else if(state.material==='laser'){
+      const a = Math.max(0,Math.min(1,(rotY+32)/64));       // 隨左右轉動變色：模擬鐳射虹彩感
+      const hue = 170 + a*160;
+      const g = c.createLinearGradient(0,0,S,S);
+      g.addColorStop(0, `hsla(${hue},80%,62%,${A(0.30)})`);
+      g.addColorStop(1, `hsla(${hue+140},75%,66%,${A(0.24)})`);
+      c.fillStyle=g; c.fillRect(0,0,S,S);
+    }else if(state.acryl && state.acrylOpa){
+      // r47 自訂色半透/不透（用戶指定）：遮光實色（半透 0.70——r48 用戶指示 0.50→0.70／不透 0.96），路由跟霧白同走遮光畫布
+      c.fillStyle = rgba(state.acryl, A(state.acrylOpa==='solid' ? 0.96 : 0.70));
+      c.fillRect(0,0,S,S);
+    }else{
+      c.fillStyle = state.acryl ? rgba(state.acryl,A(0.32)) : `rgba(255,255,255,${A(0.10)})`;   // 一般透明壓克力
+      c.fillRect(0,0,S,S);
+    }
+  }
+  // 板本色墊底只在正面 view；反面 view 板在圖「前面」，改在 4.6 罩頂（r28 層序修正）
+  // r44 分流（用戶核准）：霧白/螢光＝遮光材質 → 畫到最底遮光畫布（普通合成，深底下擋得住背景）；
+  // 一般透明/自訂色＝染色濾鏡 → 留在 multiply 下畫布（物理正確）。鐳射歸屬 2026-07-11 定案留下畫布。
+  // 白底走例：遮光白疊白≈無感＝與 r43 一致；深底走例：73% 白先鋪底，透色墨 multiply 在奶白上。
+  // r47：自訂色選半透/不透時也是遮光材質 → 同走遮光畫布。
+  const acrylBlock = !state.material && state.acryl && !!state.acrylOpa;
+  if(!back) paintBoard(1, (state.material==='frost'||NEON[state.material]||acrylBlock) ? bt : xt);
+
+  const backImg = state.back;
+  // 印刷透光參數：墨本身的深淺遮蓋由 inkify 決定；這裡只留「隔著板看（THRU）」的衰減與近面微調（OUT）
+  const THRU = 0.90, OUT = 0.95;   // r20：0.80→0.90——透射色模型下透色區還要更濃（用戶 r19 驗）。r15：0.70→0.80。r14：THRU 0.45→0.70——實測 F 白底照：同一塊淺綠底正面 #A3AF10 vs 反面 #B6D00B，差距很小，r12 砍太兇；OUT 是直視面不動
+
+  if(!back){
+    // ── 正面 view：白墨＋正面圖＝正面座標(正貼)；反面圖＝反面座標(鏡貼) ──
+    if(!state.art && !backImg && !hasWhite){
+      ctx.fillStyle='rgba(255,255,255,.35)';
+      ctx.font=`600 ${S*0.05}px sans-serif`; ctx.textAlign='center';
+      ctx.fillText('上傳設計圖', S/2, S/2);
+    }else if(state.ink==='none'){                       // 無白墨：透明玻璃，正反面互相透疊
+      if(state.art){
+        if(backImg) drawThrough(xt, backImg, false, null, false, THRU); // 背面圖不鏡像→正面看到左右相反
+        drawNear(xt, ctx, state.art, false, null, false, OUT, null, true);    // 正面圖（半透、正讀；r46 正面直視＝tintF 較透明）
+      }else if(backImg){
+        drawNear(xt, ctx, backImg, false, null, false, OUT, null);      // 只有背面圖：正面看到左右相反
+      }
+    }else{                                              // 有白墨
+      if(state.ink==='sandwich' && backImg) drawThrough(xt, backImg, false, whiteSrc, false, THRU);
+      if(hasWhite) paintWhite(ctx, whiteSrc, false);
+      if(state.art) drawNear(xt, ctx, state.art, false, hasWhite?whiteSrc:null, false, OUT, null, true);   // r46 正面直視＝tintF：白墨內縮那圈疊印變半透不變黑
+    }
+  }else{
+    // ── 背面 view：檔案都對位在正面座標 → 背面整面鏡像（每層各自鏡貼，render 不再整體翻） ──
+    if(state.ink==='none'){                             // 無白墨：透明玻璃，正反面互相透疊
+      if(backImg){
+        if(state.art) drawThrough(xt, state.art, true, null, false, THRU); // 正面圖鏡像透過來
+        drawNear(xt, ctx, backImg, true, null, false, OUT);              // 背面圖（鏡像、半透）
+      }else if(state.art){
+        drawNear(xt, ctx, state.art, true, null, false, OUT);            // 只有正面圖：背面看到鏡像
+      }
+    }else{                                              // 有白墨
+      if(state.art) drawThrough(xt, state.art, true, whiteSrc, true, THRU); // 正面圖穿透過來
+      if(hasWhite) paintWhite(ctx, whiteSrc, true);
+      if(state.ink==='sandwich'){                       // 夾層：背面有獨立印刷（鏡像）；白墨上半透（見 drawNear whiteAlpha 註解）
+        // r22 whiteAlpha 0.35→0.95：0.35 是 r8 補償「原圖全濃度重繪」的權宜值；r21 改透射色後淺色自己會白，
+        // 再壓 0.35 反而把白墨區洗淡成粉彩＝跟透色區分不開（用戶對照 E2：白墨上實色鮮豔才對）
+        if(backImg) drawNear(xt, ctx, backImg, true, hasWhite?whiteSrc:null, true, OUT, 0.95);
+        else if(state.art) drawNear(xt, ctx, state.art, true, hasWhite?whiteSrc:null, true, OUT, 0.95);
+      }
+      // 底層(bottom)：背面只見白墨白底＋非白墨區正面圖穿透，不畫背面印刷
+    }
+  }
+
+  // 3.5 （已移除）之前這裡會在印刷上方再疊一層螢光提亮/霧白雧化，會把印刷圖洗淡——登戶反映圖案變淡，因此拿掉；板材質感交給底色與側壁處理
+
+  // 4. 閃粉
+  if(state.glitter && !back){
+    // r52 兩段：少＝只畫前 180 顆（撒點照舊 420 顆，切片零重算）、多＝全畫
+    const gN = state.glitter==='hi' ? glitterPts.length : Math.min(180, glitterPts.length);
+    for(let gi=0; gi<gN; gi++){
+      const p = glitterPts[gi];
+      const tw = 0.25 + 0.75*Math.abs(Math.sin(t*0.002*p.s + p.p));
+      ctx.globalAlpha = tw*0.9;
+      ctx.fillStyle = tw>0.85 ? '#fff' : 'rgba(255,240,200,1)';
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r*(0.7+tw*0.5),0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  }
+
+  // 4. 碎光（大亮片，帶虹彩）
+  if(state.flake && !back){
+    const fk = state.flake==='lg' ? 1.3 : 0.7;   // r52 兩段：大/小＝尺寸倍率（撒點基準尺寸不動，畫時縮放）
+    for(const f of flakePts){
+      const tw = 0.35 + 0.65*Math.abs(Math.sin(t*0.0012 + f.p));
+      const fr = f.r * fk;
+      ctx.save();
+      ctx.translate(f.x,f.y); ctx.rotate(f.a);
+      ctx.globalAlpha = tw*0.55;
+      ctx.fillStyle = `hsla(${f.hue + Math.sin(t*0.001+f.p)*30}, 90%, 78%, 1)`;
+      ctx.beginPath();
+      ctx.moveTo(-fr,0); ctx.lineTo(0,-fr*0.6); ctx.lineTo(fr,0); ctx.lineTo(0,fr*0.6);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha=1;
+  }
+
+  // 4.6 反面 view：板材罩在最上層（r28 層序修正）——從反面是隔著整片板看印刷，
+  //     板色像濾鏡罩住一切（含白墨的白）。有色/鐳射/透明＝multiply 透射染色（隔綠玻璃看白紙＝綠白，
+  //     不會蓋掉圖）；霧白＝source-over 白霧（漫射非染色）；螢光黃＝染色後再補一層微白霧（半透光）。
+  //     multiply 疊在透明像素上等同 source-over 直畫 → 沒印刷的空白區也自然顯出板色。
+  //     （取代舊「墊底 1.8＋淡染 0.25」兩層做法；透明無色板下 multiply 白 0.10≈無感，r25~r27 校色不受影響）
+  if(back){
+    if(state.material==='frost' || (!state.material && state.acryl && state.acrylOpa)){
+      paintBoard();   // 霧白＝白霧；r47 半透/不透自訂色＝實色罩頂（source-over 0.70/0.96）——不透 0.96≈整片板色，物理：印刷都在正面那側
+    }else{
+      ctx.globalCompositeOperation='multiply';
+      paintBoard();
+      ctx.globalCompositeOperation='source-over';
+      if(NEON[state.material]){ ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.fillRect(0,0,S,S); }
+    }
+  }
+
+  // 4.7 表面光澤（state.gloss：只剩 streak 反光帶；corner/glaze r34 刪除——用戶：用不到。streak 修改方向未定、擱置不動）
+  if(state.gloss==='streak'){ try {
+    ctx.globalCompositeOperation='screen';
+    // 反光帶：一寬一細兩條有邊界的斜光帶，其餘乾淨；隨左右轉動平移
+    const off = Math.max(-1,Math.min(1, rotY/28)) * S*0.28;
+    ctx.save();
+    ctx.translate(S/2+off, S/2); ctx.rotate(-0.5);
+    const g = ctx.createLinearGradient(-S*0.5,0, S*0.5,0);
+    g.addColorStop(0.00,'rgba(255,255,255,0)');
+    g.addColorStop(0.33,'rgba(255,255,255,0)');
+    g.addColorStop(0.385,'rgba(255,255,255,0.48)');   // 主帶（邊緣加軟，減少假塑膠感）
+    g.addColorStop(0.44,'rgba(255,255,255,0)');
+    g.addColorStop(0.62,'rgba(255,255,255,0)');
+    g.addColorStop(0.66,'rgba(255,255,255,0.26)');    // 細帶
+    g.addColorStop(0.71,'rgba(255,255,255,0)');
+    ctx.fillStyle=g; ctx.fillRect(-S,-S,2*S,2*S);
+    ctx.restore();
+    ctx.globalCompositeOperation='source-over';
+  } catch(e){ ctx.setTransform(1,0,0,1,0,0); ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1; console.error('[gloss sweep]', e); } }
+
+  // （4.8 反光鑲邊 r35 刪除、4.9 滴膠 r37 刪除：兩者都是用戶驗過效果不好的邊緣/膠面效果，
+  //   原始碼與失敗筆記在 _notes/加回筆記.md；bevelC/ringC 遮罩生成段保留供未來加回）
+
+  // 5. 裁成刀模形狀（r43：兩張畫布各自吃遮罩）
+  ctx.globalCompositeOperation='destination-in';
+  ctx.drawImage(back?maskBackC:maskC,0,0);
+  ctx.globalCompositeOperation='source-over';
+  xt.globalCompositeOperation='destination-in';
+  xt.drawImage(back?maskBackC:maskC,0,0);
+  xt.globalCompositeOperation='source-over';
+  bt.globalCompositeOperation='destination-in';
+  bt.drawImage(back?maskBackC:maskC,0,0);
+  bt.globalCompositeOperation='source-over';
+}
+
+// ---------- 輸出 ----------
+let lastAnim=false;
+function render(t){
+  const dpr = Math.min(window.devicePixelRatio||1, 2);
+  const cssW = view.clientWidth;
+  if(view.width !== (cssW*dpr)|0){ view.width=(cssW*dpr)|0; view.height=(cssW*dpr)|0; }
+  const w=view.width, h=view.height;
+  if(viewThru.width!==w || viewThru.height!==h){ viewThru.width=w; viewThru.height=h; }
+  if(viewBlock.width!==w || viewBlock.height!==h){ viewBlock.width=w; viewBlock.height=h; }
+  vctx.clearRect(0,0,w,h);
+  vtctx.clearRect(0,0,w,h);
+  vbctx.clearRect(0,0,w,h);
+  composeCharm(t);
+  // r43 下畫布輸出：透射層直出給 CSS multiply。同一顆 filter 罩三張畫布維持色調一致
+  //（白像素在 saturate/hue-rotate 下不變＝仍是無操作）；投影陰影全系統只畫一份＝最底遮光畫布（r45，見下）
+  try { vtctx.filter='saturate(1.22) hue-rotate(4deg)'; } catch(e){}
+  vtctx.drawImage(charmThruC,0,0,w,h);
+  try { vtctx.filter='none'; } catch(e){}
+  // r45 吊飾投影搬到最底＝跟整片刀模剪影走：r43/r44 投影掛上畫布，白墨剪影的影子會印在
+  // 板材上（用戶驗「不合理」——白墨夾在壓克力裡，不該對自己的板投影）。
+  // 技巧：mask 畫在畫面外 2w、shadowOffsetX 補 2w＝只有影子落在畫面內；再把刀模內部
+  // destination-out 挖掉＝只留外緣一彎（內部不加暗紗，r43 驗過的透色區觀感不動）。
+  try {
+    const smask = state.side==='back' ? maskBackC : maskC;
+    vbctx.save();
+    vbctx.shadowColor='rgba(0,0,0,0.30)';
+    vbctx.shadowBlur=w*0.02;
+    vbctx.shadowOffsetX=2*w; vbctx.shadowOffsetY=w*0.012;
+    vbctx.drawImage(smask, -2*w, 0, w, h);
+    vbctx.restore();
+    vbctx.globalCompositeOperation='destination-out';
+    vbctx.drawImage(smask, 0, 0, w, h);
+    vbctx.globalCompositeOperation='source-over';
+  } catch(e){ vbctx.globalCompositeOperation='source-over'; console.error('[charm shadow]', e); }
+  // r44 遮光畫布輸出：普通合成直出（螢光板色吃同顆 filter＝與 r43 前單畫布時代同色）
+  try { vbctx.filter='saturate(1.22) hue-rotate(4deg)'; } catch(e){}
+  vbctx.drawImage(charmBlockC,0,0,w,h);
+  try { vbctx.filter='none'; } catch(e){}
+
+  // 側壁厚度（無/薄/厚）：建暗色剪影 → 往「轉離視線那條邊」堆疊 → 挖掉正面 footprint，只留外緣那一彎（免得暗側壁墊在半透明板正下方害它變不透明）
+  try {
+    const depthN = state.thick ? 0.05 : 0;   // 厚度開關（原「厚」檔 0.10 已刪，用不到）
+    if(depthN > 0){
+      const back = state.side==='back';
+      const mask = back ? maskBackC : maskC;
+      const depthS = depthN * S;                        // 側壁深度（S 空間）
+      const dx = -(rotY/40) * depthS;                   // 左右傾：側壁往傾斜反向露出（2026-07-09 用戶實測確認 B 版）
+      const dy = (rotX/40) * depthS;                    // 上下傾：純跟傾斜跑（2026-07-09 用戶回報方向反了，已翻正）
+      const sc = w / S;                                 // S→view 換算
+      // 建暗色側壁剪影（一次）：透明板＝中性灰、有色板＝深一階同色
+      const wc = wallC.getContext('2d');
+      wc.clearRect(0,0,S,S);
+      wc.drawImage(mask,0,0);
+      wc.globalCompositeOperation='source-in';
+      let col='rgba(150,153,160,1)';   // 透明板＝中性灰
+      if(state.material==='frost'){
+        col='rgba(210,216,222,1)';     // r33 方案A：奶白（r31 灰與 r29 死白的中間值）；發光感由下方 screen 微光層負責，這裡只管本色
+      }else if(NEON[state.material]){
+        col=`rgba(${NEON[state.material].wall},1)`;
+      }else if(state.material==='laser'){
+        const a = Math.max(0,Math.min(1,(rotY+32)/64));
+        col=`hsl(${170+a*160},70%,58%)`;
+      }else if(state.acryl){
+        const n=parseInt(state.acryl.slice(1),16), r=n>>16&255, g=n>>8&255, b=n&255;
+        // 與白混到淡色調（透明壓克力的邊不應比本色深）
+        col=`rgba(${Math.round(r*0.68+255*0.32)},${Math.round(g*0.68+255*0.32)},${Math.round(b*0.68+255*0.32)},1)`;
+      }
+      wc.fillStyle=col; wc.fillRect(0,0,S,S);
+      wc.globalCompositeOperation='source-over';
+      // 在獨立畫布堆疊整條側壁（由遠到近，傳畫布 wallC 非繪圖環境）
+      if(wallStackC.width!==w || wallStackC.height!==h){ wallStackC.width=w; wallStackC.height=h; }
+      const stk = wallStackC.getContext('2d');
+      stk.clearRect(0,0,w,h);
+      const steps = Math.min(28, Math.max(14, depthS|0));
+      for(let i=steps;i>=1;i--){ const f=i/steps; stk.drawImage(wallC, dx*f*sc, dy*f*sc, w, h); }
+      // 挖掉正面板正下方（offset 0）的 footprint → 半透明板底下露的是背景而非暗側壁（修 bug B）
+      stk.globalCompositeOperation='destination-out';
+      stk.drawImage(mask, 0, 0, w, h);
+      stk.globalCompositeOperation='source-over';
+      // 側壁明暗滾落：上緣亮、下緣暗，讓側壁看起來有真的厚度而非平色剪影
+      try {
+        const dk = state.material==='frost' ? 0.18 : 0.36;   // r33 方案A：霧白下緣壓暗減半——磨砂邊有深度但不暗沉
+        const bevel = stk.createLinearGradient(0, 0, 0, h);
+        bevel.addColorStop(0.00, 'rgba(255,255,255,0.30)');
+        bevel.addColorStop(0.18, 'rgba(255,255,255,0.08)');
+        bevel.addColorStop(0.55, 'rgba(0,0,0,0)');
+        bevel.addColorStop(1.00, `rgba(0,0,0,${dk})`);
+        stk.globalCompositeOperation='source-atop';
+        stk.fillStyle=bevel;
+        stk.fillRect(0,0,w,h);
+        stk.globalCompositeOperation='source-over';
+      } catch(e){ stk.globalCompositeOperation='source-over'; drawErr(vctx,'側壁明暗',e); }
+      vctx.globalAlpha = 0.85;                            // 壁面本身透明，但依實拍應更明顯（2026-07-09 校色調高）
+      vctx.drawImage(wallStackC, 0, 0);                 // 傳畫布不傳 context
+      if(state.material==='frost'){                     // r33 方案A：霧白限定 screen 微光層——邊條疊深背景會真的變亮（發光≠白色），白背景下近無感（同實體）
+        try {
+          vctx.globalCompositeOperation='screen';
+          vctx.globalAlpha = 0.20;
+          vctx.drawImage(wallStackC, 0, 0);
+          vctx.globalCompositeOperation='source-over';
+        } catch(e){ vctx.globalCompositeOperation='source-over'; }
+      }
+      vctx.globalAlpha = 1;
+    }
+  } catch(e){ console.error('[thickness wall]', e); }
+
+  vctx.save();
+  // r45：投影從這裡拆除、搬到最底遮光畫布跟刀模剪影走——上畫布剪影＝白墨等內容層，
+  // 掛這裡會變成「白墨對板材投影」（用戶驗 r44 時抓到，不合理）
+  try { vctx.filter='saturate(1.22) hue-rotate(4deg)'; } catch(e){}   // r13 整體鮮豔度＋r26 色偏調綠；r40 試過冷色 veil（白平衡往藍）→用戶驗「綠色的比較對」，r41 撤回——色偏議題就此定案 4°
+  vctx.drawImage(charmC,0,0,w,h);   // 背面不再整體翻：鏡像已在各層內處理
+  vctx.restore();
+}
+
+function loop(t){
+  const animating = (state.glitter||state.flake) && state.side==='front';
+  if(animating || lastAnim!==animating || pendingDraw){ render(t); pendingDraw=false; }
+  lastAnim=animating;
+  requestAnimationFrame(loop);
+}
+let pendingDraw=true;
+function redraw(){ pendingDraw=true; }
+requestAnimationFrame(loop);
+window.addEventListener('resize', redraw);
+
+// ---------- UI 綁定 ----------
+function bindSeg(id,key,after){
+  const seg=document.getElementById(id);
+  seg.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); state[key]=b.dataset.v; if(after)after(); redraw();
+  });
+}
+bindSeg('segInk','ink');
+const stagebox = document.getElementById('stagebox');
+// 自訂背景圖（r30）：選「自訂圖」就開檔案框（再點一次＝換圖；取消＝沿用上次的圖）
+const fileBg = document.getElementById('fileBg');
+let bgUrl = null;
+bindSeg('segBg','bg', ()=>{
+  stagebox.className = 'stagebox ' + state.bg;
+  if(state.bg==='custom'){
+    stagebox.style.backgroundImage = bgUrl ? `url(${bgUrl})` : '';
+    fileBg.click();
+  }else{
+    stagebox.style.backgroundImage = '';
+  }
+});
+fileBg.onchange = ()=>{
+  const f = fileBg.files && fileBg.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = ()=>{ bgUrl = rd.result; if(state.bg==='custom') stagebox.style.backgroundImage = `url(${bgUrl})`; };
+  rd.readAsDataURL(f);
+  fileBg.value = '';
+};
+
+// 壓克力顏色（r49 素材格＝規劃A v4，取代 swAcryl/segMaterial 兩套綁定）：
+// 板色（透明/自訂）與特殊材質（霧白/鐳射/螢光四色）統一 tile 點選，高亮全域互斥。
+// 點板色＝取消特殊材質；點材質＝只清高亮、state.acryl 值保留（渲染各分支材質優先，與 r48 行為一致）
+const swCustom = document.getElementById('swCustom');
+const tileCustom = document.getElementById('tileCustom');
+const attrOpa = document.getElementById('attrOpa');
+function clearTileOn(){ document.querySelectorAll('#acrylBoxes .tile.on').forEach(t=>t.classList.remove('on')); }
+function pickAcryl(tile, color){
+  clearTileOn(); tile.classList.add('on');
+  state.acryl = color; state.material = '';
+  syncAcrylOpaUI(); redraw();
+}
+function pickMaterial(tile, m){
+  clearTileOn(); tile.classList.add('on');
+  state.material = m;
+  syncAcrylOpaUI(); redraw();
+}
+document.querySelectorAll('#acrylBoxes .tile[data-c]').forEach(t=>t.onclick=()=>pickAcryl(t, t.dataset.c));
+document.querySelectorAll('#acrylBoxes .tile[data-m]').forEach(t=>t.onclick=()=>pickMaterial(t, t.dataset.m));
+// 自訂格：隱形 color input 覆蓋整格——點格＝以上次顏色立即選中＋開色盤（取消對話框＝沿用），挑色即時生效
+tileCustom.onclick = ()=> pickAcryl(tileCustom, swCustom.value);
+swCustom.oninput = ()=>{
+  tileCustom.querySelector('.box').style.setProperty('--cu', swCustom.value);
+  pickAcryl(tileCustom, swCustom.value);
+};
+// r47 透明度三段綁定照舊（state.acrylOpa 保留上次選擇）；r49 未選自訂色＝整段變灰保留位置（不再隱藏，版面不跳動）
+bindSeg('segAcrylOpa','acrylOpa');
+function syncAcrylOpaUI(){ attrOpa.classList.toggle('off', !(state.acryl && !state.material)); }
+
+// 傾斜與拖曳轉動
+let rotX=9, rotY=-13;
+function applyTilt(){
+  view.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg)`;
+  viewThru.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg)`;   // r43：下畫布同傾斜（影子 div 也要同步，見下）
+  viewBlock.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg)`;  // r44：遮光畫布同傾斜（三張不同步會錯位）
+  // r38：影子吃同一組傾斜（translate 放最外層＝右下偏移維持在螢幕座標），
+  // 影子黏在板子正後方一起動，消掉「傾斜時像被拿起來」的懸空感
+  // r39：背面 view 剪影跟著鏡像（scaleX 放最內層＝只翻圖、不影響偏移方向）
+  const gs = document.querySelector('.ground-shadow');
+  const mir = state.side==='back' ? ' scaleX(-1)' : '';
+  if(gs) gs.style.transform = `translate(1.4%,1.8%) rotateX(${rotX}deg) rotateY(${rotY}deg)${mir}`;
+}
+applyTilt();
+let dragging=null;
+stagebox.addEventListener('pointerdown', e=>{
+  dragging={x:e.clientX, y:e.clientY, rx:rotX, ry:rotY};
+  stagebox.setPointerCapture(e.pointerId);
+});
+stagebox.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  rotY = Math.max(-32, Math.min(32, dragging.ry + (e.clientX-dragging.x)*0.15));
+  rotX = Math.max(-32, Math.min(32, dragging.rx - (e.clientY-dragging.y)*0.15));
+  applyTilt();
+  redraw();   // 讓掃光帶隨轉動角度即時移動
+});
+stagebox.addEventListener('pointerup', ()=>dragging=null);
+stagebox.addEventListener('dblclick', ()=>{ rotX=9; rotY=-13; applyTilt(); redraw(); });
+
+function bindToggle(id,key){
+  const el=document.getElementById(id);
+  el.onclick=()=>{ state[key]=!state[key]; el.classList.toggle('on',state[key]); redraw(); };
+}
+// r35：光澤 seg 改「反光帶」開關（state.gloss 沿用 ''/'streak' 字串，同 tgThick 模式）
+const tgGloss = document.getElementById('tgGloss');
+tgGloss.onclick = ()=>{ state.gloss = state.gloss ? '' : 'streak'; tgGloss.classList.toggle('on', !!state.gloss); redraw(); };
+// （r49：segMaterial 已併入上方素材格 pickMaterial，此處綁定移除）
+// 厚度改開關（2026-07-10 用戶：刪「厚」用不到）；state.thick 沿用字串 ''/'thin'
+const tgThick = document.getElementById('tgThick');
+tgThick.onclick = ()=>{ state.thick = state.thick ? '' : 'thin'; tgThick.classList.toggle('on', !!state.thick); redraw(); };
+// 底部影子開關（r11：預設關；形狀用戶說不對，開了如果要修形狀再說）
+const tgShadow = document.getElementById('tgShadow');
+const groundShadow = document.querySelector('.ground-shadow');
+tgShadow.onclick = ()=>{ const on = !groundShadow.classList.contains('show'); groundShadow.classList.toggle('show', on); tgShadow.classList.toggle('on', on); };
+bindSeg('segGlitter','glitter');   // r52：閃粉/碎光改三段票（''/lo/hi、''/sm/lg）；上方 bindToggle 就此無人使用、函式保留備考
+bindSeg('segFlake','flake');
+
+document.getElementById('btnFlip').onclick=()=>{
+  state.side = state.side==='front' ? 'back' : 'front';
+  document.getElementById('btnFlip').textContent = state.side==='front' ? '⇋ 翻到背面' : '⇋ 翻回正面';
+  document.getElementById('hint').textContent = '目前：' + (state.side==='front'?'正面':'背面（鏡像）');
+  applyTilt();   // r39：影子剪影跟著翻面鏡像
+  redraw();
+};
+
+const layerUI = {};   // key → {btn,clr}，給批次上傳共用單檔載入邏輯
+function loadLayer(key, f){
+  const {btn,clr} = layerUI[key];
+  const img=new Image();
+  img.onload=()=>{
+    state[key]=img; btn.textContent=f.name; btn.classList.add('loaded'); clr.hidden=false;
+    fitDirty=true; maskDirty=true;   // 任何圖檔變動都重算共用矩形與遮罩
+    redraw();
+  };
+  img.src=URL.createObjectURL(f);
+}
+function bindFile(btnId, fileId, clrId, key){
+  const btn=document.getElementById(btnId), inp=document.getElementById(fileId), clr=document.getElementById(clrId);
+  layerUI[key]={btn,clr};
+  btn.onclick=()=>inp.click();
+  inp.onchange=()=>{
+    const f=inp.files[0]; if(!f)return;
+    loadLayer(key, f);
+  };
+  clr.onclick=()=>{
+    state[key]=null; inp.value=''; btn.textContent='選擇透明 PNG…'; btn.classList.remove('loaded'); clr.hidden=true;
+    fitDirty=true; maskDirty=true;
+    redraw();
+  };
+}
+bindFile('btnArt','fileArt','clrArt','art');
+bindFile('btnWhite','fileWhite','clrWhite','white');
+bindFile('btnBack','fileBack','clrBack','back');
+bindFile('btnShape','fileShape','clrShape','shape');
+
+// 批次上傳：檔名含關鍵字自動對號，其餘照選取順序補進 正面→白墨→反面→刀模
+const batchInp = document.getElementById('fileBatch');
+document.getElementById('btnBatch').onclick = (e)=>{ e.stopPropagation(); batchInp.click(); };   // 標題列上的鈕，別觸發摺疊
+// 圖檔卡摺疊（r31；r52 改預設收起＋收起時顯示提示小字＋批次上傳後自動展開當上傳結果確認）
+const filesBody = document.getElementById('filesBody');
+const filesArrow = document.getElementById('filesArrow');
+const filesHint = document.getElementById('filesHint');
+function setFilesOpen(open){
+  filesBody.hidden = !open;
+  filesArrow.textContent = open ? '▾' : '▸';
+  filesHint.hidden = open;
+}
+document.getElementById('filesHead').onclick = ()=> setFilesOpen(filesBody.hidden);
+batchInp.onchange = ()=>{
+  const files = [...batchInp.files]; if(!files.length) return;
+  const assigned = new Set(), rest = [];
+  for(const f of files){
+    let k = null;
+    if(/白墨|white/i.test(f.name)) k='white';
+    else if(/反面|背面|back/i.test(f.name)) k='back';
+    else if(/刀模|外形|shape|die|cut/i.test(f.name)) k='shape';
+    else if(/正面|front|art/i.test(f.name)) k='art';
+    if(k && !assigned.has(k)){ assigned.add(k); loadLayer(k, f); }
+    else rest.push(f);
+  }
+  for(const f of rest){
+    const k = ['art','white','back','shape'].find(s=>!assigned.has(s));
+    if(!k) break;   // 超過 4 張的忽略
+    assigned.add(k); loadLayer(k, f);
+  }
+  batchInp.value='';
+  setFilesOpen(true);   // r52：批次上傳完自動展開＝讓用戶看到每格對號進了什麼
+};
+
+// 檢視大小調整
+const rngSize = document.getElementById('rngSize');
+const numSize = document.getElementById('numSize');
+const btnSizeReset = document.getElementById('btnSizeReset');
+const DEFAULT_SIZE = 420;
+function setStageSize(v){
+  v = Math.max(220, Math.min(640, Math.round(v)||DEFAULT_SIZE));
+  rngSize.value = v; numSize.value = v;
+  document.documentElement.style.setProperty('--stage-size', v+'px');
+  redraw();
+}
+rngSize.oninput = ()=> setStageSize(rngSize.value);
+numSize.oninput = ()=> setStageSize(numSize.value);
+btnSizeReset.onclick = ()=> setStageSize(DEFAULT_SIZE);
+</script>
+
+
+</body></html>
