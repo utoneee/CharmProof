@@ -53,6 +53,15 @@
   .panel{flex:1 1 460px; width:auto; min-width:340px; max-width:620px; height:100%; overflow-y:auto; overflow-x:hidden; display:grid; grid-template-columns:1fr 2fr; grid-auto-rows:min-content;   /* r50：加工只剩開關再縮、檢視更寬（用戶指示；r35 原 2fr 3fr） */ align-content:start; gap:16px; padding-right:6px; scrollbar-width:thin; scrollbar-color:var(--line) transparent;}   /* r50：外層面板框撤下（用戶：不要最外層的框） */
   .seg button{white-space:nowrap;}
   @media (max-width:900px){ .panel{grid-template-columns:1fr;} }
+  /* r56 手機版：橫向雙欄改上下堆疊、整頁可直向捲動（舞台上仍是拖曳傾斜、面板區才捲頁）。桌機版零改動 */
+  @media (max-width:700px){
+    body{overflow:auto;}
+    .wrap{flex-direction:column; height:auto; min-height:0; gap:14px; padding:14px;}
+    .stage{flex:0 0 auto; min-width:0; width:100%; height:auto;}
+    .stagebox{width:min(var(--stage-size,420px),90vw);}
+    .panel{flex:0 0 auto; height:auto; min-width:0; max-width:none; width:100%; overflow:visible; padding-right:0;}
+    .panel > .flipbtn{order:-1;}   /* 手機版翻面鈕移到面板最上面（圖檔卡之前） */
+  }
   .panel::-webkit-scrollbar{width:8px;}
   .panel::-webkit-scrollbar-thumb{background:var(--line); border-radius:4px;}
   .panel::-webkit-scrollbar-track{background:transparent;}
@@ -135,7 +144,7 @@
 </style>
 </head>
 <body>
-<header><h1>CharmProof</h1><span>壓克力製作模擬 · 自用預覽功能，不保證準確度</span><span style="margin-left:auto; color:var(--accent);">r55 · 0712-4</span></header>
+<header><h1>CharmProof</h1><span>壓克力製作模擬 · 自用預覽功能，不保證準確度</span><span style="margin-left:auto; color:var(--accent);">r56 · 0712-6</span></header>
 <div class="wrap">
   <div class="stage">
     <div class="sizectrl">
